@@ -1,0 +1,49 @@
+---
+description: Instalação Bluetooth da impressora de etiquetas Coibeu WKDY-81X no Linux.
+status: accepted
+date: 2026-10-15
+---
+
+# Impressora Coibeu WKDY-81X via Bluetooth
+
+## Contexto
+
+A etiqueta em `~/Downloads/IMG_0881.HEIC` identifica uma Coibeu WKDY-81X, impressora térmica de etiquetas, 203 dpi, papel até 110 mm, interface USB e Bluetooth. Não há driver Linux da Coibeu. O anúncio Bluetooth se chama `BlueTooth Printer` e expõe Serial Port Profile no canal RFCOMM 1, não IPP. O comando `ESC !?` responde com 1 byte no formato TSPL/TSC.
+
+MAC desta unidade: `66:32:1A:63:16:C7`.
+
+## O que foi feito
+
+- Pareamento clássico não foi necessário. A conexão RFCOMM no canal 1 aceita os bytes TSPL direto.
+- Fila CUPS `Coibeu-WKDY-81X`, destino padrão do sistema, URI `socket://127.0.0.1:9101`.
+- Serviço de usuário `coibeu-rfcomm.service` escuta nessa porta e encaminha o trabalho para o canal RFCOMM.
+- Filtro `ps_to_tspl.py` converte PostScript/PDF em bitmap TSPL a 203 dpi. O PPD oferece os tamanhos 100x150, 100x100, 100x50, 80x50, 60x40, 50x30, 40x30 e 40x20 mm, e o vão de 2 mm, 3 mm ou contínuo.
+- ACL `u:lp:--x` em `$HOME`, `$HOME/.local` e `$HOME/.local/lib`, e `u:lp:r-x` em `$HOME/.local/lib/coibeu`, para o filtro do CUPS, que roda como `lp`, conseguir executar o conversor.
+- Teste real: trabalho `Coibeu-WKDY-81X-1`, 9706 bytes TSPL de uma etiqueta 40x30 mm, encaminhados pelo bridge. Status da impressora depois do envio: `0x00` (pronta, cabeça fechada, com papel).
+- A primeira etiqueta saiu em negativo. A WKDY-81X queima o bit 0. O filtro inverte o bitmap PBM (`byte ^ 0xFF`) antes do comando `BITMAP`. O mesmo ajuste está no script de instalação.
+
+## Arquivos
+
+- `~/.local/bin/instalar-impressora-coibeu.sh` — reinstala busca, configuração, serviço e fila.
+- `~/.local/lib/coibeu/ps_to_tspl.py` — filtro PostScript/PDF para TSPL.
+- `~/.local/lib/coibeu/rfcomm_bridge.py` — ponte localhost para RFCOMM.
+- `~/.local/lib/coibeu/coibeu-wkdy-81x.ppd` — descrição da fila.
+- `~/.config/coibeu/printer.conf` — `MAC`, `CHANNEL` e `PORT`.
+- `~/.config/systemd/user/coibeu-rfcomm.service` — serviço habilitado no login do usuário.
+
+## Reinstalação
+
+Com a impressora ligada:
+
+```bash
+instalar-impressora-coibeu.sh
+instalar-impressora-coibeu.sh testar
+```
+
+`testar` imprime uma etiqueta 40x30 mm com o texto `WKDY-81X CUPS`. Sem argumento, o script só reinstala. Se a impressora estiver desligada e o MAC já estiver em `printer.conf`, a fila é recriada com esse MAC.
+
+## Pendências
+
+- O tamanho padrão da fila é 100x150 mm. No diálogo de impressão, escolher o tamanho real da etiqueta e, para papel contínuo, o vão `Continuo`.
+- O CUPS 2.4 avisou que PPDs serão descontinuados numa versão futura. A fila funciona nesta versão.
+- USB não foi usado. A instalação pedida é só Bluetooth.
