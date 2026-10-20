@@ -1,5 +1,5 @@
 ---
-description: Instalação Bluetooth da impressora de etiquetas Coibeu WKDY-81X no Linux.
+description: Instalação Bluetooth da impressora de etiquetas Coibeu WKDY-81X no Linux e no Windows.
 status: accepted
 date: 2026-10-15
 ---
@@ -24,16 +24,40 @@ MAC desta unidade: `66:32:1A:63:16:C7`.
 
 ## Arquivos
 
-- `~/.local/bin/instalar-impressora-coibeu.sh` — reinstala busca, configuração, serviço e fila.
+- `~/.local/bin/instalar-impressora-coibeu.sh` — reinstala busca, configuração, serviço e fila no Linux e no macOS.
 - `~/.local/lib/coibeu/ps_to_tspl.py` — filtro PostScript/PDF para TSPL.
 - `~/.local/lib/coibeu/rfcomm_bridge.py` — ponte localhost para RFCOMM.
 - `~/.local/lib/coibeu/coibeu-wkdy-81x.ppd` — descrição da fila.
 - `~/.config/coibeu/printer.conf` — `MAC`, `CHANNEL` e `PORT`.
 - `~/.config/systemd/user/coibeu-rfcomm.service` — serviço habilitado no login do usuário.
+- `instalar-impressora-coibeu.ps1` — instala a fila no Windows.
+- `instalar-impressora-coibeu.cmd` — chama o PowerShell com `ExecutionPolicy Bypass`.
+- `drivers/windows/Driver64` e `drivers/windows/Driver32` — driver Unidrv TSPL copiado de `C:\Program Files (x86)\Label Driver Setup_Ver1.0.6`.
+- `%ProgramData%\Coibeu\printer.conf` — no Windows, `MAC`, `CHANNEL` e `PORT`.
+- `%ProgramData%\Coibeu\coibeu-rfcomm.exe` — ponte `127.0.0.1:9101` para o canal RFCOMM 1. A tarefa `Coibeu-WKDY-81X` sobe no logon.
+
+## Windows
+
+O pacote Label Driver Setup é um driver Unidrv de modelo `LABEL`. O INF não tem hardware ID de USB. `LABELCORE.dll` gera `SIZE`, `GAP`, `BITMAP` e `PRINT` e envia com `WritePrinter`. O pareamento clássico não completa (a API devolve 258) e não é necessário: o canal RFCOMM 1 aceita os bytes direto e o comando `ESC !?` responde `0x00`. `SOCKADDR_BTH` tem que ir com empacotamento de 1 byte; o layout alinhado faz o `connect` devolver 10049.
+
+A fila `Coibeu-WKDY-81X` usa a porta TCP crua `CoibeuBT` em `127.0.0.1:9101`, com SNMP desligado. A ponte encaminha o trabalho para o MAC no canal 1. A fila fica como impressora padrão. `LegacyDefaultPrinterMode=1` impede o Windows 10 de trocar o padrão sozinho.
+
+O script escolhe `Driver64` ou `Driver32` pela arquitetura, confere `printer.cat`, registra o pacote com `pnputil` e o modelo no spooler com `printui /ia` (`Add-PrinterDriver` devolve `0x80070057` neste INF), liga o rádio e procura `BlueTooth Printer`. Se a busca falhar e o MAC já estiver em `printer.conf`, reutiliza esse MAC.
+
+`printer.cat` está assinado. Não editar `LabelPrinter.inf`, `LabelPrinter.gpd`, `LabelPrinter.ini`, `LABELCORE.dll`, `LABELUI.dll` nem `printer.cat`.
+
+Com a impressora ligada:
+
+```bat
+instalar-impressora-coibeu.cmd
+instalar-impressora-coibeu.cmd testar
+```
+
+`testar` imprime uma etiqueta 40x30 mm com o texto `WKDY-81X`. Sem argumento, o script só reinstala.
 
 ## Reinstalação
 
-Com a impressora ligada:
+No Linux ou no macOS, com a impressora ligada:
 
 ```bash
 instalar-impressora-coibeu.sh
@@ -44,6 +68,8 @@ instalar-impressora-coibeu.sh testar
 
 ## Pendências
 
-- O tamanho padrão da fila é 100x150 mm. No diálogo de impressão, escolher o tamanho real da etiqueta e, para papel contínuo, o vão `Continuo`.
+- Windows: a fila `Coibeu-WKDY-81X` foi criada e o teste `WKDY-81X` encaminhou 9745 bytes em 2026-10-20. Conferir no papel se o vão e a polaridade saíram certos. O `ESC !?` antes do teste respondeu `0x00`.
+- O GPD não oferece vão de 2 mm, 3 mm ou contínuo. No Windows o `GAP` sai do padrão interno de `LABELCORE.dll`. O tamanho padrão do driver é 100x150 mm. No diálogo de impressão, escolher o tamanho real. O teste usa o tamanho personalizado 40x30 mm, dentro do `CUSTOMSIZE` do GPD.
+- No Linux, o tamanho padrão da fila é 100x150 mm. No diálogo de impressão, escolher o tamanho real da etiqueta e, para papel contínuo, o vão `Continuo`.
 - O CUPS 2.4 avisou que PPDs serão descontinuados numa versão futura. A fila funciona nesta versão.
-- USB não foi usado. A instalação pedida é só Bluetooth.
+- A ligação pedida é Bluetooth. No Windows o pacote TSPL do instalador USB é o driver da fila; a porta é `127.0.0.1:9101`. No Linux a fila também é `socket://127.0.0.1:9101`.

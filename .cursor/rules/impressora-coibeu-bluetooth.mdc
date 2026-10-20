@@ -1,0 +1,26 @@
+---
+description: Instalação Bluetooth da Coibeu WKDY-81X no Windows com o driver TSPL LABEL.
+alwaysApply: true
+---
+
+# Coibeu WKDY-81X no Windows
+
+A fila é `Coibeu-WKDY-81X`, driver `LABEL`, porta TCP crua `CoibeuBT` em `127.0.0.1:9101`. O anúncio é `BlueTooth Printer`. MAC desta unidade: `66:32:1A:63:16:C7`. Canal RFCOMM 1, sem pareamento.
+
+## Feito
+
+- `instalar-impressora-coibeu.ps1` instala o driver, compila `%ProgramData%\Coibeu\coibeu-rfcomm.exe` e agenda a tarefa `Coibeu-WKDY-81X` no logon. `instalar-impressora-coibeu.cmd` dispara o script.
+- O driver entra com `pnputil` e `printui /ia`. `Add-PrinterDriver` devolve `0x80070057` neste INF.
+- `drivers/windows/Driver64` e `Driver32` são o Unidrv TSPL de `Label Driver Setup_Ver1.0.6`. O INF não tem hardware ID de USB. `LABELCORE.dll` emite `SIZE`, `GAP`, `BITMAP` e `PRINT` via `WritePrinter`.
+- `SOCKADDR_BTH` usa `Pack = 1`. O pareamento devolve 258 e não é usado. `ESC !?` no canal 1 responde `0x00`.
+- Configuração em `%ProgramData%\Coibeu\printer.conf`: `MAC`, `CHANNEL`, `PORT`.
+- `printer.cat` está assinado. Não editar INF, GPD, INI, DLL nem CAT.
+
+## Reinstalar
+
+Com a impressora ligada: `instalar-impressora-coibeu.cmd` ou `instalar-impressora-coibeu.cmd testar`. `testar` imprime 40x30 mm com o texto `WKDY-81X`.
+
+## Falta
+
+- A etiqueta de teste de 2026-10-20 encaminhou 9745 bytes. Conferir no papel o vão e a polaridade.
+- O GPD não expõe vão de 2 mm, 3 mm ou contínuo. O `GAP` fica no padrão de `LABELCORE.dll`.
