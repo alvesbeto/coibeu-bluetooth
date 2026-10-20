@@ -22,7 +22,7 @@ Com a impressora ligada: `instalar-impressora-coibeu.cmd` ou `instalar-impressor
 
 ## Linux e macOS
 
-O mesmo `LABELCORE.dll` define o filtro. Vão padrão 3 mm, `DENSITY 8`, `SPEED 8`, `SET TEAR ON`. A inversão do bitmap permanece. `DIRECTION` fica 1. Tamanhos novos no PPD, todos com largura de até 110 mm: 40x50, 50x20, 72x100, 72x150, 72x180, 100x25 e 100x180. 194 mm fica de fora porque passa da boca. As medidas de 94 e 105 mm do GPD também ficam de fora: repetem a série de 100 mm deste driver genérico.
+O mesmo `LABELCORE.dll` define o filtro. Vão padrão 3 mm, `DENSITY 8`, `SPEED 8`, `SET TEAR ON`. A inversão do bitmap permanece. `DIRECTION` fica 1. Pixel que não é branco de papel queima: o corte em 50% apagava o vermelho `255, 0, 26`, que o Ghostscript vira cinza 129. No macOS o raster é RGB de 8 bits. No Windows o `LABELCORE.dll` já queima esse vermelho, com limiar 200. Tamanhos novos no PPD, todos com largura de até 110 mm: 40x50, 50x20, 72x100, 72x150, 72x180, 100x25 e 100x180. 194 mm fica de fora porque passa da boca. As medidas de 94 e 105 mm do GPD também ficam de fora: repetem a série de 100 mm deste driver genérico.
 
 ## Falta
 

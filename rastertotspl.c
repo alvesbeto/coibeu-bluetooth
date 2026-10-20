@@ -46,38 +46,57 @@ static int copies_from_args(int argc, char **argv)
   return copies;
 }
 
-static int sample_is_black(unsigned color_space, unsigned bits, unsigned value)
-{
-  if (bits == 1) {
-    if (color_space == CUPS_CSPACE_K)
-      return value != 0;
-    return value == 0;
-  }
-  if (color_space == CUPS_CSPACE_K)
-    return value >= 128;
-  return value < 128;
-}
+/* Channels at or above this stay unburned paper. A 50% luminance cut maps
+ * the J&T red (255, 0, 26) to white. Thermal stock is 1 bit, so any pixel
+ * that is not paper-white burns as a solid dot, matching the preview.
+ */
+#define PAPER_LEVEL 250
 
-static unsigned char pixel_byte(
+static int pixel_is_ink(
     const unsigned char *row,
     unsigned x,
+    unsigned color_space,
     unsigned bits_per_pixel,
     unsigned bits_per_color)
 {
   unsigned byte_index;
+  unsigned value;
+  unsigned red;
+  unsigned green;
+  unsigned blue;
 
   if (bits_per_pixel <= 1) {
     byte_index = x / 8;
-    return (row[byte_index] >> (7 - (x % 8))) & 0x1;
+    value = (row[byte_index] >> (7 - (x % 8))) & 0x1;
+    if (color_space == CUPS_CSPACE_K)
+      return value != 0;
+    return value == 0;
   }
+
   byte_index = x * (bits_per_pixel / 8);
   if (bits_per_color >= 8 && bits_per_pixel >= 24) {
-    unsigned red = row[byte_index];
-    unsigned green = row[byte_index + 1];
-    unsigned blue = row[byte_index + 2];
-    return (unsigned char)((red * 77 + green * 150 + blue * 29) >> 8);
+    if (color_space == CUPS_CSPACE_CMYK || color_space == CUPS_CSPACE_YMCK ||
+        color_space == CUPS_CSPACE_KCMY) {
+      unsigned channel;
+      unsigned channels = bits_per_pixel / 8;
+      if (channels > 4)
+        channels = 4;
+      for (channel = 0; channel < channels; channel++) {
+        if (row[byte_index + channel] > (255 - PAPER_LEVEL))
+          return 1;
+      }
+      return 0;
+    }
+    red = row[byte_index];
+    green = row[byte_index + 1];
+    blue = row[byte_index + 2];
+    return red < PAPER_LEVEL || green < PAPER_LEVEL || blue < PAPER_LEVEL;
   }
-  return row[byte_index];
+
+  value = row[byte_index];
+  if (color_space == CUPS_CSPACE_K)
+    return value > (255 - PAPER_LEVEL);
+  return value < PAPER_LEVEL;
 }
 
 static int write_page(
@@ -118,9 +137,12 @@ static int write_page(
   for (y = 0; y < height; y++) {
     const unsigned char *row = pixels + (size_t)y * stride;
     for (x = 0; x < width; x++) {
-      unsigned char sample = pixel_byte(
-          row, x, header->cupsBitsPerPixel, header->cupsBitsPerColor);
-      if (!sample_is_black(header->cupsColorSpace, header->cupsBitsPerPixel, sample))
+      if (!pixel_is_ink(
+              row,
+              x,
+              header->cupsColorSpace,
+              header->cupsBitsPerPixel,
+              header->cupsBitsPerColor))
         continue;
       bitmap[(size_t)y * row_bytes + (x / 8)] &= (unsigned char)~(0x80 >> (x % 8));
     }

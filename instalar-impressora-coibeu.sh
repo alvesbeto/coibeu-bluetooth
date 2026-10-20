@@ -48,6 +48,9 @@ import subprocess
 import sys
 
 DPI = 203
+# Channels at or above this stay unburned paper. The J&T red (255, 0, 26)
+# becomes gray 129 in Ghostscript, so a 50% cut leaves it white on the label.
+PAPER_LEVEL = 250
 
 
 def parse_args(argv):
@@ -59,8 +62,24 @@ def parse_args(argv):
     return args
 
 
-def iter_pbm_pages(data):
-    """Yield width, height and packed bitmap rows from Ghostscript pbmraw."""
+def _next_token(data, index):
+    length = len(data)
+    while index < length and data[index] in b" \t\r\n":
+        index += 1
+    if index < length and data[index] == ord("#"):
+        while index < length and data[index] not in b"\r\n":
+            index += 1
+        return _next_token(data, index)
+    start = index
+    while index < length and data[index] not in b" \t\r\n":
+        index += 1
+    if start == index:
+        raise RuntimeError("truncated PPM header")
+    return data[start:index], index
+
+
+def iter_ppm_pages(data):
+    """Yield width, height and packed RGB from Ghostscript ppmraw."""
     index = 0
     length = len(data)
     while index < length:
@@ -68,33 +87,42 @@ def iter_pbm_pages(data):
             index += 1
         if index >= length:
             return
-        if data[index:index + 2] != b"P4":
-            raise RuntimeError(f"unexpected PBM header at offset {index}")
+        if data[index:index + 2] != b"P6":
+            raise RuntimeError(f"unexpected PPM header at offset {index}")
         index += 2
-        tokens = []
-        while len(tokens) < 2:
-            while index < length and data[index] in b" \t\r\n":
-                index += 1
-            if index < length and data[index] == ord("#"):
-                while index < length and data[index] not in b"\r\n":
-                    index += 1
-                continue
-            start = index
-            while index < length and data[index] not in b" \t\r\n":
-                index += 1
-            if start == index:
-                raise RuntimeError("truncated PBM header")
-            tokens.append(int(data[start:index]))
+        width_token, index = _next_token(data, index)
+        height_token, index = _next_token(data, index)
+        max_token, index = _next_token(data, index)
+        width = int(width_token)
+        height = int(height_token)
+        if int(max_token) != 255:
+            raise RuntimeError("unsupported PPM max value")
         if index < length and data[index] in b" \t\r\n":
             index += 1
-        width, height = tokens
-        row_bytes = (width + 7) // 8
-        nbytes = row_bytes * height
-        bitmap = data[index:index + nbytes]
-        if len(bitmap) != nbytes:
-            raise RuntimeError("truncated PBM bitmap")
+        nbytes = width * height * 3
+        rgb = data[index:index + nbytes]
+        if len(rgb) != nbytes:
+            raise RuntimeError("truncated PPM bitmap")
         index += nbytes
-        yield width, height, bitmap
+        yield width, height, rgb
+
+
+def pack_ink(width, height, rgb):
+    """Pack a 1-bit page where 1 means burn. Near-white pixels stay paper."""
+    row_bytes = (width + 7) // 8
+    bitmap = bytearray(row_bytes * height)
+    pixel = 0
+    for y in range(height):
+        row = y * row_bytes
+        for x in range(width):
+            red = rgb[pixel]
+            green = rgb[pixel + 1]
+            blue = rgb[pixel + 2]
+            pixel += 3
+            if red >= PAPER_LEVEL and green >= PAPER_LEVEL and blue >= PAPER_LEVEL:
+                continue
+            bitmap[row + (x // 8)] |= 0x80 >> (x % 8)
+    return bytes(bitmap)
 
 
 def invert_bitmap(bitmap):
@@ -139,18 +167,18 @@ def ghostscript_executable():
     raise RuntimeError("ghostscript (gs) not found")
 
 
-def render_pbm(document):
+def render_ppm(document):
     command = [
         ghostscript_executable(),
         "-q",
         "-dSAFER",
         "-dBATCH",
         "-dNOPAUSE",
-        "-sDEVICE=pbmraw",
+        "-dTextAlphaBits=1",
+        "-dGraphicsAlphaBits=1",
+        "-sDEVICE=ppmraw",
         "-r203",
         "-sOutputFile=-",
-        "-c",
-        "{0.5 gt {1} {0} ifelse} settransfer",
         "-f",
         "-",
     ]
@@ -174,10 +202,10 @@ def main():
     document = sys.stdin.buffer.read()
     if not document:
         return
-    rendered = render_pbm(document)
+    rendered = render_ppm(document)
     output = bytearray()
-    for width, height, bitmap in iter_pbm_pages(rendered):
-        output += page_to_tspl(width, height, bitmap, args.gap)
+    for width, height, rgb in iter_ppm_pages(rendered):
+        output += page_to_tspl(width, height, pack_ink(width, height, rgb), args.gap)
     sys.stdout.buffer.write(output)
 
 
@@ -398,8 +426,6 @@ lines = [
     '*NickName: "Coibeu WKDY-81X Bluetooth"',
     '*PSVersion: "(3010.000) 0"',
     '*LanguageLevel: "3"',
-    '*ColorDevice: False',
-    '*DefaultColorSpace: Gray',
     '*FileSystem: False',
     '*Throughput: "8"',
     '*LandscapeOrientation: Plus90',
@@ -411,10 +437,16 @@ lines = [
     '*cupsModelNumber: 1',
 ]
 if mode == "macos":
-    # macOS already turns PDF into CUPS raster. The filter must live in the
-    # CUPS ServerBin and be owned by root, or cupsd refuses to run it.
+    # macOS already turns PDF into CUPS raster. Ask for 8-bit RGB so a 1-bit
+    # gray cut cannot drop the J&T red before rastertotspl sees the channels.
+    # The filter must live in the CUPS ServerBin and be owned by root, or
+    # cupsd refuses to run it.
+    lines.append('*ColorDevice: True')
+    lines.append('*DefaultColorSpace: RGB')
     lines.append('*cupsFilter: "application/vnd.cups-raster 0 rastertotspl-coibeu"')
 else:
+    lines.append('*ColorDevice: False')
+    lines.append('*DefaultColorSpace: Gray')
     lines += [
         '*cupsFilter: "application/vnd.cups-pdf 100 foomatic-rip"',
         '*cupsFilter: "application/vnd.cups-postscript 100 foomatic-rip"',
@@ -459,12 +491,23 @@ lines += [
     '*DefaultResolution: 203dpi',
     '*Resolution 203dpi/203 DPI: "<</HWResolution[203 203]>>setpagedevice"',
     '*CloseUI: *Resolution',
-    '*OpenUI *ColorModel/Cor: PickOne',
-    '*OrderDependency: 20 AnySetup *ColorModel',
-    '*DefaultColorModel: Gray',
-    '*ColorModel Gray/Escala de cinza: "<</cupsColorSpace 3/cupsColorOrder 0/cupsBitsPerColor 1>>setpagedevice"',
-    '*CloseUI: *ColorModel',
 ]
+if mode == "macos":
+    lines += [
+        '*OpenUI *ColorModel/Cor: PickOne',
+        '*OrderDependency: 20 AnySetup *ColorModel',
+        '*DefaultColorModel: RGB',
+        '*ColorModel RGB/Cor: "<</cupsColorSpace 1/cupsColorOrder 0/cupsBitsPerColor 8>>setpagedevice"',
+        '*CloseUI: *ColorModel',
+    ]
+else:
+    lines += [
+        '*OpenUI *ColorModel/Cor: PickOne',
+        '*OrderDependency: 20 AnySetup *ColorModel',
+        '*DefaultColorModel: Gray',
+        '*ColorModel Gray/Escala de cinza: "<</cupsColorSpace 3/cupsColorOrder 0/cupsBitsPerColor 1>>setpagedevice"',
+        '*CloseUI: *ColorModel',
+    ]
 if mode == "macos":
     lines += [
         '*OpenUI *GapMm/Espaco entre etiquetas: PickOne',

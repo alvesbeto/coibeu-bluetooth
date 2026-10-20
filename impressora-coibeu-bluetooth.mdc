@@ -20,7 +20,8 @@ MAC desta unidade: `66:32:1A:63:16:C7`.
 - Filtro `ps_to_tspl.py` converte PostScript/PDF em bitmap TSPL a 203 dpi. O PPD oferece os tamanhos do GPD que cabem nos 110 mm desta unidade: 100x150, 100x180, 100x100, 100x50, 100x25, 80x50, 72x180, 72x150, 72x100, 60x40, 50x30, 50x20, 40x50, 40x30 e 40x20 mm. O vão padrão é 3 mm, com opção de 2 mm ou contínuo.
 - ACL `u:lp:--x` em `$HOME`, `$HOME/.local` e `$HOME/.local/lib`, e `u:lp:r-x` em `$HOME/.local/lib/coibeu`, para o filtro do CUPS, que roda como `lp`, conseguir executar o conversor.
 - Teste real: trabalho `Coibeu-WKDY-81X-1`, 9706 bytes TSPL de uma etiqueta 40x30 mm, encaminhados pelo bridge. Status da impressora depois do envio: `0x00` (pronta, cabeça fechada, com papel).
-- A primeira etiqueta saiu em negativo. A WKDY-81X queima o bit 0. O filtro inverte o bitmap PBM (`byte ^ 0xFF`) antes do comando `BITMAP`. `LABELCORE.dll` faz o mesmo `NOT` em cada byte. O cabeçalho TSPL segue o driver: `DENSITY 8`, `SPEED 8` (índice 14) e `SET TEAR ON`. `DIRECTION` permanece 1, que foi o valor conferido nesta unidade.
+- A primeira etiqueta saiu em negativo. A WKDY-81X queima o bit 0. O filtro inverte o bitmap (`byte ^ 0xFF`) antes do comando `BITMAP`. `LABELCORE.dll` faz o mesmo `NOT` em cada byte. O cabeçalho TSPL segue o driver: `DENSITY 8`, `SPEED 8` (índice 14) e `SET TEAR ON`. `DIRECTION` permanece 1, que foi o valor conferido nesta unidade.
+- Cor que não é branco de papel vira ponto queimado. O corte de luminosidade em 50% apagava o vermelho da J&T (`255, 0, 26`): o Ghostscript transforma esse RGB em cinza 129. No Linux o filtro lê o PPM colorido. No macOS o raster pedido é RGB de 8 bits e `rastertotspl` usa a mesma regra. No Windows o `LABELCORE.dll` já queima esse vermelho: Rec.601 e difusão de erro com limiar 200. O pacote assinado não muda.
 
 ## Arquivos
 
