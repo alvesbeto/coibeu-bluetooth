@@ -20,6 +20,10 @@ A fila é `Coibeu-WKDY-81X`, driver `LABEL`, porta TCP crua `CoibeuBT` em `127.0
 
 Com a impressora ligada: `instalar-impressora-coibeu.cmd` ou `instalar-impressora-coibeu.cmd testar`. `testar` imprime 40x30 mm com o texto `WKDY-81X`.
 
+## Linux e macOS
+
+O mesmo `LABELCORE.dll` define o filtro. Vão padrão 3 mm, `DENSITY 8`, `SPEED 8`, `SET TEAR ON`. A inversão do bitmap permanece. `DIRECTION` fica 1. Tamanhos novos no PPD, todos com largura de até 110 mm: 40x50, 50x20, 72x100, 72x150, 72x180, 100x25 e 100x180. 194 mm fica de fora porque passa da boca. As medidas de 94 e 105 mm do GPD também ficam de fora: repetem a série de 100 mm deste driver genérico.
+
 ## Falta
 
 - A etiqueta de teste de 2026-10-20 encaminhou 9745 bytes. Conferir no papel o vão e a polaridade.

@@ -1,7 +1,9 @@
 /*
  * CUPS raster to TSPL for the Coibeu WKDY-81X.
- * macOS converts PDF through cgpdftoraster. The printer burns a cleared bit,
- * matching the inversion in ps_to_tspl.py.
+ * macOS converts PDF through cgpdftoraster. LABELCORE inverts each bitmap
+ * byte, and the WKDY-81X burns a cleared bit, so this filter does the same.
+ * Vendor defaults copied from that DLL: DENSITY 8, SPEED 8, SET TEAR ON,
+ * and a 3 mm gap when the stored gap height is 0.
  */
 
 #include <cups/raster.h>
@@ -19,10 +21,10 @@ static double gap_mm(const char *options)
   const char *found;
 
   if (options == NULL)
-    return 2.0;
+    return 3.0;
   found = strstr(options, "GapMm=");
   if (found == NULL)
-    return 2.0;
+    return 3.0;
   found += 6;
   if (strncmp(found, "Gap0", 4) == 0)
     return 0.0;
@@ -128,9 +130,11 @@ static int write_page(
   height_mm = (double)height / (double)dpi * 25.4;
   if (printf(
           "SIZE %.2f mm, %.2f mm\r\n"
+          "DIRECTION 1\r\n"
           "GAP %.2f mm, 0 mm\r\n"
           "DENSITY 8\r\n"
-          "DIRECTION 1\r\n"
+          "SPEED 8\r\n"
+          "SET TEAR ON\r\n"
           "CLS\r\n"
           "BITMAP 0,0,%u,%u,0,",
           width_mm,

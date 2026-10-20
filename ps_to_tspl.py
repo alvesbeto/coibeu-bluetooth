@@ -12,7 +12,7 @@ DPI = 203
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--gap", type=float, default=2.0)
+    parser.add_argument("--gap", type=float, default=3.0)
     args, _unknown = parser.parse_known_args(argv)
     if args.gap < 0:
         args.gap = 0.0
@@ -63,14 +63,21 @@ def invert_bitmap(bitmap):
 
 
 def page_to_tspl(width, height, bitmap, gap_mm):
+    # LABELCORE sends SIZE, DIRECTION, GAP, DENSITY, SPEED, SET TEAR, CLS, BITMAP.
+    # Its defaults are density 8, speed index 14 (TSPL SPEED 8) and a 3 mm gap.
+    # A stored gap of 0 mm is rewritten to 3 mm for gapped stock.
+    # DIRECTION stays 1 because this unit was printed and checked with that value.
+    # The DLL also inverts each bitmap byte before BITMAP mode 0.
     width_mm = width / DPI * 25.4
     height_mm = height / DPI * 25.4
     row_bytes = (width + 7) // 8
     header = (
         f"SIZE {width_mm:.2f} mm, {height_mm:.2f} mm\r\n"
+        "DIRECTION 1\r\n"
         f"GAP {gap_mm:.2f} mm, 0 mm\r\n"
         "DENSITY 8\r\n"
-        "DIRECTION 1\r\n"
+        "SPEED 8\r\n"
+        "SET TEAR ON\r\n"
         "CLS\r\n"
         f"BITMAP 0,0,{row_bytes},{height},0,"
     ).encode("ascii")

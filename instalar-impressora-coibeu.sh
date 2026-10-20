@@ -52,7 +52,7 @@ DPI = 203
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--gap", type=float, default=2.0)
+    parser.add_argument("--gap", type=float, default=3.0)
     args, _unknown = parser.parse_known_args(argv)
     if args.gap < 0:
         args.gap = 0.0
@@ -103,14 +103,21 @@ def invert_bitmap(bitmap):
 
 
 def page_to_tspl(width, height, bitmap, gap_mm):
+    # LABELCORE sends SIZE, DIRECTION, GAP, DENSITY, SPEED, SET TEAR, CLS, BITMAP.
+    # Its defaults are density 8, speed index 14 (TSPL SPEED 8) and a 3 mm gap.
+    # A stored gap of 0 mm is rewritten to 3 mm for gapped stock.
+    # DIRECTION stays 1 because this unit was printed and checked with that value.
+    # The DLL also inverts each bitmap byte before BITMAP mode 0.
     width_mm = width / DPI * 25.4
     height_mm = height / DPI * 25.4
     row_bytes = (width + 7) // 8
     header = (
         f"SIZE {width_mm:.2f} mm, {height_mm:.2f} mm\r\n"
+        "DIRECTION 1\r\n"
         f"GAP {gap_mm:.2f} mm, 0 mm\r\n"
         "DENSITY 8\r\n"
-        "DIRECTION 1\r\n"
+        "SPEED 8\r\n"
+        "SET TEAR ON\r\n"
         "CLS\r\n"
         f"BITMAP 0,0,{row_bytes},{height},0,"
     ).encode("ascii")
@@ -362,6 +369,13 @@ sizes = [
     (50, 30, "w50h30", "50 x 30 mm", False),
     (40, 30, "w40h30", "40 x 30 mm", False),
     (40, 20, "w40h20", "40 x 20 mm", False),
+    (40, 50, "w40h50", "40 x 50 mm", False),
+    (50, 20, "w50h20", "50 x 20 mm", False),
+    (72, 100, "w72h100", "72 x 100 mm", False),
+    (72, 150, "w72h150", "72 x 150 mm", False),
+    (72, 180, "w72h180", "72 x 180 mm", False),
+    (100, 25, "w100h25", "100 x 25 mm", False),
+    (100, 180, "w100h180", "100 x 180 mm", False),
 ]
 
 def pixels(mm):
@@ -455,7 +469,7 @@ if mode == "macos":
     lines += [
         '*OpenUI *GapMm/Espaco entre etiquetas: PickOne',
         '*OrderDependency: 100 AnySetup *GapMm',
-        '*DefaultGapMm: Gap2',
+        '*DefaultGapMm: Gap3',
         '*GapMm Gap2/2 mm: ""',
         '*GapMm Gap3/3 mm: ""',
         '*GapMm Gap0/Continuo: ""',
@@ -466,7 +480,7 @@ else:
         '*OpenUI *GapMm/Espaco entre etiquetas: PickOne',
         '*FoomaticRIPOption GapMm: enum CmdLine A',
         '*OrderDependency: 100 AnySetup *GapMm',
-        '*DefaultGapMm: Gap2',
+        '*DefaultGapMm: Gap3',
         '*GapMm Gap2/2 mm: "%% FoomaticRIPOptionSetting: GapMm=2"',
         '*GapMm Gap3/3 mm: "%% FoomaticRIPOptionSetting: GapMm=3"',
         '*GapMm Gap0/Continuo: "%% FoomaticRIPOptionSetting: GapMm=0"',
@@ -715,7 +729,7 @@ showpage
 with open(sys.argv[1], "w", encoding="ascii") as handle:
     handle.write(content)
 PY
-  lp -d "${QUEUE}" -o media=w40h30 -o GapMm=Gap2 -t "coibeu-teste" "${page}"
+  lp -d "${QUEUE}" -o media=w40h30 -o GapMm=Gap3 -t "coibeu-teste" "${page}"
   rm -f "${page}"
 }
 
@@ -756,7 +770,7 @@ chunks.append(
 with open(sys.argv[1], "wb") as handle:
     handle.write(b"".join(chunks))
 PY
-  lp -d "${QUEUE}" -o PageSize=w40h30 -o media=w40h30 -o GapMm=Gap2 -t "coibeu-teste" "${page}"
+  lp -d "${QUEUE}" -o PageSize=w40h30 -o media=w40h30 -o GapMm=Gap3 -t "coibeu-teste" "${page}"
   rm -f "${page}"
 }
 

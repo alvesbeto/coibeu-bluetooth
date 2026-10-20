@@ -17,10 +17,10 @@ MAC desta unidade: `66:32:1A:63:16:C7`.
 - Pareamento clássico não foi necessário. A conexão RFCOMM no canal 1 aceita os bytes TSPL direto.
 - Fila CUPS `Coibeu-WKDY-81X`, destino padrão do sistema, URI `socket://127.0.0.1:9101`.
 - Serviço de usuário `coibeu-rfcomm.service` escuta nessa porta e encaminha o trabalho para o canal RFCOMM.
-- Filtro `ps_to_tspl.py` converte PostScript/PDF em bitmap TSPL a 203 dpi. O PPD oferece os tamanhos 100x150, 100x100, 100x50, 80x50, 60x40, 50x30, 40x30 e 40x20 mm, e o vão de 2 mm, 3 mm ou contínuo.
+- Filtro `ps_to_tspl.py` converte PostScript/PDF em bitmap TSPL a 203 dpi. O PPD oferece os tamanhos do GPD que cabem nos 110 mm desta unidade: 100x150, 100x180, 100x100, 100x50, 100x25, 80x50, 72x180, 72x150, 72x100, 60x40, 50x30, 50x20, 40x50, 40x30 e 40x20 mm. O vão padrão é 3 mm, com opção de 2 mm ou contínuo.
 - ACL `u:lp:--x` em `$HOME`, `$HOME/.local` e `$HOME/.local/lib`, e `u:lp:r-x` em `$HOME/.local/lib/coibeu`, para o filtro do CUPS, que roda como `lp`, conseguir executar o conversor.
 - Teste real: trabalho `Coibeu-WKDY-81X-1`, 9706 bytes TSPL de uma etiqueta 40x30 mm, encaminhados pelo bridge. Status da impressora depois do envio: `0x00` (pronta, cabeça fechada, com papel).
-- A primeira etiqueta saiu em negativo. A WKDY-81X queima o bit 0. O filtro inverte o bitmap PBM (`byte ^ 0xFF`) antes do comando `BITMAP`. O mesmo ajuste está no script de instalação.
+- A primeira etiqueta saiu em negativo. A WKDY-81X queima o bit 0. O filtro inverte o bitmap PBM (`byte ^ 0xFF`) antes do comando `BITMAP`. `LABELCORE.dll` faz o mesmo `NOT` em cada byte. O cabeçalho TSPL segue o driver: `DENSITY 8`, `SPEED 8` (índice 14) e `SET TEAR ON`. `DIRECTION` permanece 1, que foi o valor conferido nesta unidade.
 
 ## Arquivos
 
@@ -70,6 +70,6 @@ instalar-impressora-coibeu.sh testar
 
 - Windows: a fila `Coibeu-WKDY-81X` foi criada e o teste `WKDY-81X` encaminhou 9745 bytes em 2026-10-20. Conferir no papel se o vão e a polaridade saíram certos. O `ESC !?` antes do teste respondeu `0x00`.
 - O GPD não oferece vão de 2 mm, 3 mm ou contínuo. No Windows o `GAP` sai do padrão interno de `LABELCORE.dll`. O tamanho padrão do driver é 100x150 mm. No diálogo de impressão, escolher o tamanho real. O teste usa o tamanho personalizado 40x30 mm, dentro do `CUSTOMSIZE` do GPD.
-- No Linux, o tamanho padrão da fila é 100x150 mm. No diálogo de impressão, escolher o tamanho real da etiqueta e, para papel contínuo, o vão `Continuo`.
+- No Linux e no macOS, o tamanho padrão da fila é 100x150 mm e o vão padrão é 3 mm. No diálogo de impressão, escolher o tamanho real da etiqueta e, para papel contínuo, o vão `Continuo`. Reinstalar para o filtro passar a mandar `SPEED 8` e `SET TEAR ON`.
 - O CUPS 2.4 avisou que PPDs serão descontinuados numa versão futura. A fila funciona nesta versão.
 - A ligação pedida é Bluetooth. No Windows o pacote TSPL do instalador USB é o driver da fila; a porta é `127.0.0.1:9101`. No Linux a fila também é `socket://127.0.0.1:9101`.
